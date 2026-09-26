@@ -200,6 +200,25 @@ runs **5.7 ms** after one warm-up (M-series laptop, production mode). Query coun
 fixed: 1 device query + 4 in `loadInputs()`, whatever the row count. No cache: resolution is
 fresh per request, so there is no stale-authority question to answer.
 
+### 2026-09-26 21:22 IST · `npm run dev` restarted itself forever — found by opening it in a browser
+Every test suite runs the server with plain `node` (production mode), and my earlier dev smoke
+test did too, so none of them used `node --watch`. Opening the app with `npm run dev` showed
+"Restarting 'server/index.js'" ~20 times in 8 s with no requests, then hanging on
+"Waiting for graceful termination".
+Wrong turns, in order: (1) the DB file in `starter/` triggering the watcher — no: touching a
+file in `starter/` caused 0 restarts. (2) the data — an empty DB showed 0 restarts, but only
+because the server crashed on startup (no tables), so there was nothing to restart; a
+misleading comparison. (3) the open browser tab reconnecting — no: port 8093, no browser,
+still 15 restarts. A plain `fs.watch` on `server/` saw no events at all, so the trigger was
+outside it.
+Cause: watching `node_modules/.vite-temp` caught `rename vite.config.js.timestamp-….mjs`. Vite
+bundles its config to a temp file, imports it, deletes it; `node --watch` tracks imported files,
+sees one vanish, restarts — and the restart loads the config again.
+Fix: `configLoader: 'native'` on `createServer` in `server/index.js` (Vite 6.4.3): the config is
+imported as-is, no temp file. After: 0 restarts idle and after requests; touching
+`server/router.js` restarts once and settles. Lesson: "all suites green" said nothing about the
+command the graders actually type.
+
 ## Correction — 2026-09-26 21:12 IST (commit e9615d7; this heading itself first said 19:35 — also a guess)
 
 The heading times above were first written as estimates, not read from a clock, and several

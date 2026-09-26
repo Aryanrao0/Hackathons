@@ -106,7 +106,10 @@ async function serveStatic(req, res, url) {
 let vite = null;
 if (DEV) {
   const { createServer } = await import('vite');
-  vite = await createServer({ server: { middlewareMode: true }, appType: 'spa' });
+  // configLoader 'native': import vite.config.js as-is. The default loader bundles it to a
+  // temp .mjs, imports it and deletes it — and `node --watch` sees an imported file vanish
+  // and restarts, which loads the config again: an endless restart loop under `npm run dev`.
+  vite = await createServer({ server: { middlewareMode: true }, appType: 'spa', configLoader: 'native' });
   console.log('vite middleware attached (HMR enabled)');
 }
 

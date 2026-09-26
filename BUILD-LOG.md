@@ -139,7 +139,21 @@ _What did you decide counts as an auditable event, and what pushed you to that l
 
 ## Phase 7 — the console
 
-_Where did the server's answer and your instinct disagree about what should be on screen?_
+### 2026-09-26 21:40 IST · console built against the server's answers only
+Needed a role list for the role/invite selects and there is no endpoint for it; typing the
+five roles into `web/` would be exactly the hardcoded matrix the brief forbids, and would miss
+`reviewer`. Added `GET /v1/roles` (reads the table). The grant form's permission checkboxes
+are the keys of `/auth/me`'s `permissions` object — the server's catalogue — so
+`device:reboot` is offered without the console knowing it exists.
+Anticipated bug, designed out before it happened: the boot path calls `/auth/refresh`. Two
+refreshes with the same cookie (React effects running twice, two quick reloads) would make
+the server see the second as a replay and revoke the family — logging the user out on reload.
+`refreshSession()` in `web/api.js` keeps one request in flight.
+Cards are keyed `${orgId}:${card}` so an org switch remounts them with empty state — the
+"no other org's content in the DOM" guarantee comes from that, not from clearing fields.
+Result: `npm run build && npx playwright test` 25/25 on first run. Smoke-tested
+`npm run dev` separately (Vite middleware): `/` and `/invite/x` 200, personalised `reviewer`
+user logs in.
 
 ## Phase 8 — hardening
 

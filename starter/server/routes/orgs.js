@@ -63,6 +63,12 @@ function removeMembership(db, ctx, orgId, userId, action) {
 export function orgRoutes(on, { db }) {
   const member = (p) => ({ targetType: 'user', targetId: p.userId });
 
+  // The role list the console offers in its selects. Read from the table so the console
+  // never carries its own copy — an undocumented role shows up here like any other.
+  on('get', '/v1/roles', 'role.list', (ctx, _p, res) => {
+    send(res, 200, { roles: db.prepare('SELECT key, label, rank FROM roles ORDER BY rank DESC').all() });
+  });
+
   // --- orgs -------------------------------------------------------------------
 
   on('get', '/v1/orgs', 'org.list', (ctx, _p, res) => {

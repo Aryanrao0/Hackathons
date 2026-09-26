@@ -11,23 +11,29 @@ gives nothing away.
 
 ---
 
-<!-- EXAMPLE — delete this block, keep the shape.
-
-## 2026-03-04 · Phase 0 — orientation
-
-Expected the unknown-permission test to fail on my validation code.
-Observed: it passed, with foreign_keys ON, and *also* passed with the pragma removed — so the
-check was never running, and the "pass" was the schema loading fine while enforcing nothing.
-Changed: moved `foreign_keys = ON` to connection open and re-ran; now it raises
-`FOREIGN KEY constraint failed` as the README said it would.
-Note: this is the failure mode where a passing test is worse than a failing one.
-
--->
-
 ## Phase 0 — orientation
 
-_Installed, reset the database, read the documents, ran the suites against the untouched skeleton.
-What did the starting line actually look like, and which failure surprised you?_
+### 2026-09-26 17:56 IST · repo cleanup before any code
+The fork of `rhinostream/Hackathons` contains more than the hand-out: the top-level README is the
+organisers' file and says `q1-starter/` is the reference implementation and `DISCOVERY-RUBRIC.md`
+is organiser-only. Did not open either. Removed both (plus `tools/`, `HARDENING.md`) in the first
+commit so nothing from them can end up in this repo; built only from `starter/` and the
+candidate-facing docs. Flagging it to the organisers by email.
+Working with Claude Code (AI pair) throughout — see `DECISIONS.md` › Tools.
+
+### 2026-09-26 18:05 IST · starting line
+`npm install`, `npm run db:reset` on Node 22.16. Loader printed `permissions=20 patterns=27`, not
+the 19/26 the reference.sql comment promises: my overlay (nonce `starter-demo`) adds role
+`reviewer` at rank 35 and permission `device:reboot`.
+Consequence I did not expect: the extra permission is a *device* permission, so `device:*` must
+expand to 8 permissions here, and PERMISSIONS.md §4 ("`device:*` collapses to the seven device
+permissions") is wrong for this database. Wildcards have to be expanded from the table.
+Rank 35 sits between admin (40) and operator (30), so the rank rules must read `roles.rank` too.
+Suites against the untouched skeleton:
+- `check-jwt.js` 0/43 — every case throws the NOT_IMPLEMENTED error, not a 401.
+- `check-permissions.js`, `check-personalisation.js` — crash on the `resolve()` stub.
+- `check-api.js` — first failure is `dana logs in: got 404`, not a 401. I expected auth to be the
+  first wall; it is the empty route table. Login is ours to write too, not only verification.
 
 ## Phase 1 — token verification
 

@@ -13,6 +13,20 @@ Rules, from `DISCOVERY-BRIEF.md`:
 
 <!-- decisions appended below as they are made -->
 
+### The verifier checks the signature before it parses the payload, and validates base64url strictly
+
+**What I chose:** `verifyAccessToken` (`starter/server/auth.js`) decodes the header, pins
+`alg=HS256`/`typ=JWT`, compares the HMAC with `timingSafeEqual`, and only then parses claims.
+Every segment must match `/^[A-Za-z0-9_-]+$/` before it is decoded.
+**Why:** Node's base64url decoder is lenient — `'Q!UJD'` and `'QUJD'` decode to the same bytes
+(BUILD-LOG Phase 1, 18:20). Without the regex a signature can be mutated without invalidating
+it, so a token string is not a unique identity for a token.
+**What I rejected:** parse header and payload first, then verify (the common tutorial order). It
+passes `check-jwt.js` equally, but runs `JSON.parse` on unauthenticated input and makes it easy
+to accidentally branch on an unverified claim.
+**What would change my mind:** needing to accept tokens from another issuer with a different
+alg — then the key/alg would be chosen by our config per issuer, still never by the header.
+
 ---
 
 ## Where this repo argues with itself

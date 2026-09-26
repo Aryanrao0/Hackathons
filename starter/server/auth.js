@@ -70,13 +70,61 @@ export function issueAccessToken({ userId, orgId, role, permVersion }, secret) {
 // AUTH-DATA-MODEL.md §10 lists the failure modes; §2 defines the claim set.
 // `node scripts/check-jwt.js` is the public test suite for this function.
 // ---------------------------------------------------------------------------
+const B64URL = /^[A-Za-z0-9_-]+$/;
+
+// Decode one base64url segment into a plain JSON object, or null. Arrays, strings and
+// null all count as "not an object" — a header of `"HS256"` must not slip through.
+function decodeSegment(segment) {
+  if (!B64URL.test(segment)) return null;
+  try {
+    const value = JSON.parse(unb64(segment).toString('utf8'));
+    return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+// Order matters: header, then signature, THEN payload. The payload is attacker-controlled
+// until the signature says otherwise, so it is not parsed before that.
 export function verifyAccessToken(token, secret) {
-  // YOURS TO WRITE. Every failure mode listed above must be a 401 UNAUTHENTICATED.
-  // `node scripts/check-jwt.js` is the public suite for this function.
-  throw Object.assign(
-    new Error('TODO: server/auth.js — verifyAccessToken() is yours to write (AUTH-DATA-MODEL.md §10).'),
-    { code: 'NOT_IMPLEMENTED' }
-  );
+  if (typeof token !== 'string') throw unauthenticated('missing token');
+
+  const parts = token.split('.');
+  if (parts.length !== 3) throw unauthenticated('malformed token');
+  const [h, p, s] = parts;
+
+  // 1. The header is read, never trusted: exactly HS256/JWT or nothing. This is the
+  //    `alg: none` / algorithm-substitution defence — we never pick an algorithm from it.
+  const header = decodeSegment(h);
+  if (!header || header.alg !== ALG || header.typ !== 'JWT') throw unauthenticated('unsupported token header');
+
+  // 2. Signature, constant time. timingSafeEqual throws on unequal lengths, so check first.
+  if (!B64URL.test(s)) throw unauthenticated('bad signature');
+  const expected = createHmac('sha256', secret).update(`${h}.${p}`).digest();
+  const actual = unb64(s);
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+    throw unauthenticated('bad signature');
+  }
+
+  // 3. Only now is the payload worth reading.
+  const claims = decodeSegment(p);
+  if (!claims) throw unauthenticated('malformed token');
+
+  // exp is half-open: exp == now is already expired (<=, not <).
+  const now = Math.floor(Date.now() / 1000);
+  if (typeof claims.exp !== 'number' || !Number.isFinite(claims.exp) || claims.exp <= now) {
+    throw unauthenticated('token expired');
+  }
+  if (claims.iss !== ISS || claims.aud !== AUD) throw unauthenticated('wrong issuer or audience');
+  if (typeof claims.jti !== 'string' || claims.jti === '') throw unauthenticated('missing jti');
+
+  // Not in the TODO list, but context.js relies on these shapes; a signed token without
+  // them is still not one we issued, and should be a 401 rather than a 500 later on.
+  if (typeof claims.sub !== 'string' || typeof claims.org !== 'string' || !Number.isInteger(claims.pv)) {
+    throw unauthenticated('malformed claims');
+  }
+
+  return claims;
 }
 
 

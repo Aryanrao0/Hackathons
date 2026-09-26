@@ -37,8 +37,17 @@ Suites against the untouched skeleton:
 
 ## Phase 1 — token verification
 
-_What did you expect each failure mode to look like before you ran it? Which one behaved
-differently from your expectation, and what did that tell you?_
+### 2026-09-26 18:20 IST · verifyAccessToken
+Order chosen: header → signature → payload. The payload is not `JSON.parse`d until the HMAC
+matches, so unauthenticated bytes never reach the parser. `check-jwt.js`: 43/43 on first run.
+Prediction I had not tested: that `Buffer.from(x, 'base64url')` rejects junk. It does not.
+Checked in a REPL: `'!!!not-base64!!!'` decodes to 7 bytes of garbage, and `'Q!UJD'` decodes to
+the *same bytes* as `'QUJD'`. So without the `B64URL` regex in `auth.js`, a valid signature
+with a `!` spliced in still verifies — many different token strings, one signature. The suite
+would still pass (the junk case fails on length), which is why the regex matters and the test
+did not show it. Kept the regex on header, payload and signature.
+Also added: `sub`/`org` must be strings and `pv` an integer. Not in the TODO list, but
+`context.js` will rely on them, and a malformed-but-signed token should be a 401, not a 500.
 
 ## Phase 2 — caller context and the resolution engine
 

@@ -19,7 +19,7 @@ Rules, from `DISCOVERY-BRIEF.md`:
 `alg=HS256`/`typ=JWT`, compares the HMAC with `timingSafeEqual`, and only then parses claims.
 Every segment must match `/^[A-Za-z0-9_-]+$/` before it is decoded.
 **Why:** Node's base64url decoder is lenient — `'Q!UJD'` and `'QUJD'` decode to the same bytes
-(BUILD-LOG Phase 1, 18:20). Without the regex a signature can be mutated without invalidating
+(BUILD-LOG Phase 1, 17:58). Without the regex a signature can be mutated without invalidating
 it, so a token string is not a unique identity for a token.
 **What I rejected:** parse header and payload first, then verify (the common tutorial order). It
 passes `check-jwt.js` equally, but runs `JSON.parse` on unauthenticated input and makes it easy
@@ -122,7 +122,7 @@ when the handler's transaction rolled back, and double-log for handlers that alr
 1. **Equal-rank modification.** PERMISSIONS §6: "modify a user of equal role (admin → admin) |
    403". `check-api.js:150`: owner demoting another owner → 200. Built: equal rank refused
    *except* for the owner role (`assertCanModify` in `lifecycle.js`). Why: otherwise a second
-   owner is irremovable; last-owner protection covers the real risk. (BUILD-LOG 20:40)
+   owner is irremovable; last-owner protection covers the real risk. (BUILD-LOG 18:08)
 2. **"`device:*` collapses to the seven device permissions"** (PERMISSIONS §4). False for any
    database with the personalisation overlay: mine has `device:reboot`, so `device:*` is 8.
    Built against the schema: `expandPattern` reads `permissions.resource`.
@@ -144,7 +144,7 @@ when the handler's transaction rolled back, and double-log for handlers that alr
 ## Deliberately not built
 
 - **Caching of resolved permissions.** Measured 5.7 ms for 504 device rows with fresh
-  resolution (BUILD-LOG 22:20). A cache would add the one failure mode the brief warns about —
+  resolution (BUILD-LOG 19:22). A cache would add the one failure mode the brief warns about —
   stale authority — to save time nobody can see.
 - **Pagination on devices, members, grants.** Audit has it (it grows without bound); the others
   are bounded by what an org owns and measured fine at 500+.

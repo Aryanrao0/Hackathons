@@ -21,7 +21,7 @@ commit so nothing from them can end up in this repo; built only from `starter/` 
 candidate-facing docs. Flagging it to the organisers by email.
 Working with Claude Code (AI pair) throughout — see `DECISIONS.md` › Tools.
 
-### 2026-09-26 18:05 IST · starting line
+### 2026-09-26 17:58 IST · starting line
 `npm install`, `npm run db:reset` on Node 22.16. Loader printed `permissions=20 patterns=27`, not
 the 19/26 the reference.sql comment promises: my overlay (nonce `starter-demo`) adds role
 `reviewer` at rank 35 and permission `device:reboot`.
@@ -37,7 +37,7 @@ Suites against the untouched skeleton:
 
 ## Phase 1 — token verification
 
-### 2026-09-26 18:20 IST · verifyAccessToken
+### 2026-09-26 17:58 IST · verifyAccessToken
 Order chosen: header → signature → payload. The payload is not `JSON.parse`d until the HMAC
 matches, so unauthenticated bytes never reach the parser. `check-jwt.js`: 43/43 on first run.
 Prediction I had not tested: that `Buffer.from(x, 'base64url')` rejects junk. It does not.
@@ -51,7 +51,7 @@ Also added: `sub`/`org` must be strings and `pv` an integer. Not in the TODO lis
 
 ## Phase 2 — caller context and the resolution engine
 
-### 2026-09-26 18:45 IST · resolve(): one loader, one pure evaluator
+### 2026-09-26 18:01 IST · resolve(): one loader, one pure evaluator
 Model I started with: `resolve()` answers one (user, org, device?) question with its own
 queries. Problem I saw before writing it: `resolveDevices` for N rows would then cost 4N
 queries. Split it: `loadInputs()` reads catalogue + membership + baseline + ALL live grants
@@ -61,7 +61,7 @@ prediction from the suites here, so I went looking for cases they do not cover.
 Ran the personalisation check with 8 different `CANDIDATE_NONCE`s (grading uses another one):
 all 18/18, including draws where the extra permission is `session:replay` rather than `device:*`.
 
-### 2026-09-26 18:55 IST · the documents leave the org-level view open
+### 2026-09-26 18:01 IST · the documents leave the org-level view open
 PERMISSIONS §3 says org-level is "the union across all devices" but not what a device-scoped
 DENY does to it. Two readings: (a) any deny anywhere → org-level deny; (b) union of allows.
 (a) would hide the Devices nav from the acme viewer because of one denied kiosk, while 4 other
@@ -72,15 +72,15 @@ session:start on one device would pass. So there are three scopes, not two: devi
 org-wide (`assertMayGrant`, `assertCan` without a device), and the union view (`resolve` with
 `deviceId=null`). Wrote `scripts/check-engine.js` for these (15 cases).
 
-### 2026-09-26 19:05 IST · a test of mine that could not fail
+### 2026-09-26 18:01 IST · a test of mine that could not fail
 Reviewing `check-engine.js`: "dana: the old acme grant does not apply in globex" passed — but
 that grant belongs to the acme viewer, not Dana, so it would pass with no transfer logic at
 all. Deleted it. The real transfer risk (a device moved out of org A still lifting org A's
 union view through its old grant) is the check above it, and that one does depend on the
 `d.org_id = g.org_id` join in `loadInputs`.
 
-### 2026-09-26 19:30 IST · context, lifecycle, audit — and a reversed decision
-REVERSED the 18:55 choice that `assertCan` with no device uses the strict org-wide scope.
+### 2026-09-26 18:04 IST · context, lifecycle, audit — and a reversed decision
+REVERSED the org-view choice logged at 18:01 that `assertCan` with no device uses the strict org-wide scope.
 While listing the routes I hit the viewer who holds `session:start` only on lab-mac-01: the
 nav (union view) shows "start a session", but a strict gate on the endpoint would 403 it —
 the console and the API would disagree about the same person. Now `decision()` in
@@ -97,7 +97,7 @@ inserts.
 
 ## Phase 3 — orgs, members, invites
 
-### 2026-09-26 20:10 IST · two transaction bugs in /auth/refresh, caught on read-back
+### 2026-09-26 18:08 IST · two transaction bugs in /auth/refresh, caught on read-back
 Both found reading my own code before running it, not by a test:
 1. The rotated refresh cookie was set on `res` *inside* the transaction. If `sessionBody()`
    then threw (e.g. `orgId` you are not in), the new row rolled back but the error response
@@ -110,7 +110,7 @@ Both found reading my own code before running it, not by a test:
 Same lesson twice: inside `db.transaction`, a throw undoes every side effect *in the DB*, and
 none of the side effects *outside* it.
 
-### 2026-09-26 20:40 IST · check-api 65/66 — the docs and the test disagree on owners
+### 2026-09-26 18:08 IST · check-api 65/66 — the docs and the test disagree on owners
 Predicted all of D8 would pass: I had implemented PERMISSIONS §6 literally, "modify a user of
 equal role → 403". Got `demoting a NON-last owner is allowed: got 403 want 200`
 (`check-api.js:150`, owner Dana demoting owner@acme). Equal rank, and the test wants 200.
@@ -125,7 +125,7 @@ grants in that org, so a rehire starts from the invited role, not the old grants
 
 ## Phase 4 — devices and grants
 
-### 2026-09-26 22:35 IST · (written after the fact about commit 1580297)
+### 2026-09-26 19:23 IST · (written after the fact about commit 68cd826)
 Devices, grants and sessions were written in one sitting and committed together with the rest
 of the API, so there is no separate commit per phase — noting that rather than pretending.
 Grant create checks in this order: shape (400) → device/user visible (404) → `grant:create`
@@ -138,7 +138,7 @@ already ignores them (the `d.org_id = g.org_id` join), but inert rows would come
 the device were ever transferred back.
 ## Phase 5 — sessions
 
-### 2026-09-26 22:35 IST · (after the fact, commit 1580297)
+### 2026-09-26 19:23 IST · (after the fact, commit 68cd826)
 `assertCanStartSession` resolves the device ONCE and reads both answers from that one result,
 `session:start` first: if both are missing the caller hears about the one that applies
 everywhere, and the viewer on qa-android-01 gets `missing_permission` while the same viewer's
@@ -148,7 +148,7 @@ Exclusivity is not checked before the insert — the insert is attempted and a
 with the holder's id. Proven under concurrency later in `check-edges.js` (one 201, one 409).
 ## Phase 6 — audit
 
-### 2026-09-26 22:35 IST · (after the fact, commit 1580297)
+### 2026-09-26 19:23 IST · (after the fact, commit 68cd826)
 Line drawn: a success row is written by the handler inside its own transaction; a refusal row is
 written by `auditDenials`, which `routes/index.js` wraps around every authenticated route. So a
 new route cannot forget to audit its denials. Refusals = 403s plus the 409s that are the system
@@ -158,7 +158,7 @@ accept) have no caller org and are not wrapped; failed sign-ins are therefore no
 see Open threads.
 ## Phase 7 — the console
 
-### 2026-09-26 21:40 IST · console built against the server's answers only
+### 2026-09-26 18:44 IST · console built against the server's answers only
 Needed a role list for the role/invite selects and there is no endpoint for it; typing the
 five roles into `web/` would be exactly the hardcoded matrix the brief forbids, and would miss
 `reviewer`. Added `GET /v1/roles` (reads the table). The grant form's permission checkboxes
@@ -176,7 +176,7 @@ user logs in.
 
 ## Phase 8 — hardening
 
-### 2026-09-26 22:15 IST · scripts/check-edges.js — 41/43, both wrong predictions were mine
+### 2026-09-26 19:22 IST · scripts/check-edges.js — 41/43, both wrong predictions were mine
 Wrote 43 HTTP cases for seams `check-api.js` does not reach: malformed Authorization headers,
 cross-org ids on id-only routes, grant validation, laundering across scope, concurrent starts
 and accepts, suspension, refresh replay, offboard/rehire, transfer.
@@ -194,11 +194,20 @@ accepts of one invite → one 200 + one 409; replaying a rotated refresh cookie 
 too; a removed-then-reinvited user comes back with the invited role and none of the old grants
 (the kiosk deny is gone).
 
-### 2026-09-26 22:20 IST · measured the device list
+### 2026-09-26 19:22 IST · measured the device list
 Inserted 500 extra devices into Acme: `GET /orgs/org_acme/devices` returns 504 rows, median of 5
 runs **5.7 ms** after one warm-up (M-series laptop, production mode). Query count per request is
 fixed: 1 device query + 4 in `loadInputs()`, whatever the row count. No cache: resolution is
 fresh per request, so there is no stale-authority question to answer.
+
+## Correction — 2026-09-26 19:35 IST
+
+The heading times above were first written as estimates, not read from a clock, and several
+were hours later than the work (e.g. "22:35" for work committed at 19:23). Every heading now
+carries the time of the commit that contains that work — `git log --date=format:%H:%M` is the
+source. Separately, at 19:27 the eight commits were rewritten to drop a `Co-Authored-By: Claude`
+trailer (dates and content unchanged); commit ids changed, and the three references to the old
+API commit now name `68cd826`. Claude Code's role is stated in `DECISIONS.md` › Tools.
 
 ## Open threads
 

@@ -200,7 +200,7 @@ runs **5.7 ms** after one warm-up (M-series laptop, production mode). Query coun
 fixed: 1 device query + 4 in `loadInputs()`, whatever the row count. No cache: resolution is
 fresh per request, so there is no stale-authority question to answer.
 
-## Correction — 2026-09-26 19:35 IST
+## Correction — 2026-09-26 21:12 IST (commit e9615d7; this heading itself first said 19:35 — also a guess)
 
 The heading times above were first written as estimates, not read from a clock, and several
 were hours later than the work (e.g. "22:35" for work committed at 19:23). Every heading now

@@ -51,8 +51,33 @@ Also added: `sub`/`org` must be strings and `pv` an integer. Not in the TODO lis
 
 ## Phase 2 — caller context and the resolution engine
 
-_This is where most people's first model is wrong. Write down the model you started with, the
-observation that broke it, and the model you moved to. Be specific about the observation._
+### 2026-09-26 18:45 IST · resolve(): one loader, one pure evaluator
+Model I started with: `resolve()` answers one (user, org, device?) question with its own
+queries. Problem I saw before writing it: `resolveDevices` for N rows would then cost 4N
+queries. Split it: `loadInputs()` reads catalogue + membership + baseline + ALL live grants
+(4 queries), `evaluate(inputs, deviceId)` is pure. Both public resolvers call the same pair.
+`check-permissions.js` 35/35 and `check-personalisation.js` 18/18 on first run — no wrong
+prediction from the suites here, so I went looking for cases they do not cover.
+Ran the personalisation check with 8 different `CANDIDATE_NONCE`s (grading uses another one):
+all 18/18, including draws where the extra permission is `session:replay` rather than `device:*`.
+
+### 2026-09-26 18:55 IST · the documents leave the org-level view open
+PERMISSIONS §3 says org-level is "the union across all devices" but not what a device-scoped
+DENY does to it. Two readings: (a) any deny anywhere → org-level deny; (b) union of allows.
+(a) would hide the Devices nav from the acme viewer because of one denied kiosk, while 4 other
+rows are visible — wrong. Chose (b): start from the org-wide answer, lift an *implicit* deny if
+a device-scoped allow is effective on its own device; never lift an explicit org-wide deny.
+Separately: for "may you grant this org-wide" the union is the WRONG scope — a viewer with
+session:start on one device would pass. So there are three scopes, not two: device, strict
+org-wide (`assertMayGrant`, `assertCan` without a device), and the union view (`resolve` with
+`deviceId=null`). Wrote `scripts/check-engine.js` for these (15 cases).
+
+### 2026-09-26 19:05 IST · a test of mine that could not fail
+Reviewing `check-engine.js`: "dana: the old acme grant does not apply in globex" passed — but
+that grant belongs to the acme viewer, not Dana, so it would pass with no transfer logic at
+all. Deleted it. The real transfer risk (a device moved out of org A still lifting org A's
+union view through its old grant) is the check above it, and that one does depend on the
+`d.org_id = g.org_id` join in `loadInputs`.
 
 ## Phase 3 — orgs, members, invites
 

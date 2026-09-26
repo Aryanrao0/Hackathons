@@ -27,6 +27,33 @@ to accidentally branch on an unverified claim.
 **What would change my mind:** needing to accept tokens from another issuer with a different
 alg — then the key/alg would be chosen by our config per issuer, still never by the header.
 
+
+### The org-level view counts device-scoped allows but never device-scoped denies
+
+**What I chose:** `resolve(..., deviceId=null)` (`evaluateOrgView` in `permissions.js`) starts
+from the org-wide answer and lifts an *implicit* deny when a device-scoped allow is effective on
+its own device. Org-wide denies are never lifted; device-scoped denies do not spread upward.
+**Why:** the acme viewer has `device:view` denied on one kiosk and allowed on four other rows;
+"deny anywhere → deny org-level" would remove their Devices nav while rows are visible. And the
+viewer's one-device `session:start` must light the Sessions "start" entry — `check-engine.js`
+"viewer: session:start org-level".
+**What I rejected:** one scope for everything. Using the union for `assertMayGrant` lets a
+one-device allow be regranted org-wide — `check-engine.js` "may NOT grant it org-wide from a
+one-device grant" fails under it. So the union is display-only.
+**What would change my mind:** a requirement that org-level nav reflect "allowed on every
+device" rather than "on some device".
+
+### Session refusals name the missing half, not the deny kind
+
+**What I chose:** `assertCanStartSession` resolves the device once and refuses with
+`missing_permission` (no `session:start`) or `missing_device_permission` (no mode permission),
+even when the cause is an explicit deny; the message says "explicitly denied" vs "not granted".
+**Why:** the brief requires the refusal to say *which* permission was missing
+(`check-api.js` §9 reads those two strings). One reason field cannot carry both facts.
+**What I rejected:** `reason: explicit_deny` whenever a grant denied it — the caller can then no
+longer tell "you cannot open sessions here at all" from "not on this device".
+**What would change my mind:** an error shape with a second field (e.g. `permission`) the tests
+accept; then both facts could be machine-readable.
 ---
 
 ## Where this repo argues with itself

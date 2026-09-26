@@ -125,18 +125,37 @@ grants in that org, so a rehire starts from the invited role, not the old grants
 
 ## Phase 4 — devices and grants
 
-_What happens at the boundary where two grants disagree, or where a grant's scope and the
-question's scope differ? Say what you predicted and what you got._
-
+### 2026-09-26 22:35 IST · (written after the fact about commit 1580297)
+Devices, grants and sessions were written in one sitting and committed together with the rest
+of the API, so there is no separate commit per phase — noting that rather than pretending.
+Grant create checks in this order: shape (400) → device/user visible (404) → `grant:create`
+(403) → self-grant (403) → `assertMayGrant` (403) → insert, where the FK rejects unknown
+strings. Consequence I noticed: `['device:teleport']` expands to nothing, so the laundering
+check passes vacuously and the FK is what refuses it — `400 unknown_permission`, as
+`check-api.js` expects. With `['device:teleport','org:delete']` an admin gets the 403 first.
+Transfer revokes the old org's grants on the device instead of leaving them inert: the engine
+already ignores them (the `d.org_id = g.org_id` join), but inert rows would come back to life if
+the device were ever transferred back.
 ## Phase 5 — sessions
 
-_Two permissions, one device. What did you have to resolve, and in what order, to keep the two
-failure reasons distinguishable?_
-
+### 2026-09-26 22:35 IST · (after the fact, commit 1580297)
+`assertCanStartSession` resolves the device ONCE and reads both answers from that one result,
+`session:start` first: if both are missing the caller hears about the one that applies
+everywhere, and the viewer on qa-android-01 gets `missing_permission` while the same viewer's
+`control` on lab-mac-01 gets `missing_device_permission` (check-api §9).
+Exclusivity is not checked before the insert — the insert is attempted and a
+`SQLITE_CONSTRAINT_UNIQUE` from `one_exclusive_session_per_device` becomes `409 DEVICE_BUSY`
+with the holder's id. Proven under concurrency later in `check-edges.js` (one 201, one 409).
 ## Phase 6 — audit
 
-_What did you decide counts as an auditable event, and what pushed you to that line?_
-
+### 2026-09-26 22:35 IST · (after the fact, commit 1580297)
+Line drawn: a success row is written by the handler inside its own transaction; a refusal row is
+written by `auditDenials`, which `routes/index.js` wraps around every authenticated route. So a
+new route cannot forget to audit its denials. Refusals = 403s plus the 409s that are the system
+saying no (`LAST_OWNER`, `DEVICE_BUSY`). Not 404s: a probe of another org's id would otherwise
+write a row describing it into the caller's own org's log. Public routes (login, invite
+accept) have no caller org and are not wrapped; failed sign-ins are therefore not audited —
+see Open threads.
 ## Phase 7 — the console
 
 ### 2026-09-26 21:40 IST · console built against the server's answers only
@@ -183,6 +202,8 @@ fresh per request, so there is no stale-authority question to answer.
 
 ## Open threads
 
+- Failed sign-ins are not audited: `audit_events.org_id` is NOT NULL and a failed login has no
+  org. A per-user security log would need a table the schema does not have.
 - Rank rules do not apply to grants: an admin may create a deny grant on an owner (the laundering
   rule still stops granting what they lack). The documents list the grant checks without a rank
   rule, so I followed them; I would argue for adding one.

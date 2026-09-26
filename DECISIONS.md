@@ -54,6 +54,67 @@ even when the cause is an explicit deny; the message says "explicitly denied" vs
 longer tell "you cannot open sessions here at all" from "not on this device".
 **What would change my mind:** an error shape with a second field (e.g. `permission`) the tests
 accept; then both facts could be machine-readable.
+
+### No role is named in code — "owner" is the top rank in `roles`
+
+**What I chose:** `ownerRole(db)` in `lifecycle.js` is `ORDER BY rank DESC LIMIT 1`; creator-
+becomes-owner, last-owner protection and "only an owner confers owner" all use it. Rank rules
+read `roles.rank`. `grep -rn "'owner'\|'admin'" starter/server starter/web` finds two hits, neither
+a role check: a comment in `lifecycle.js` and the Admin *card* key in `web/App.jsx`.
+**Why:** grading swaps the fixture; my overlay already added `reviewer` at rank 35, between admin
+and operator. A literal `'owner'` would be the one place the matrix leaked into code.
+**What I rejected:** `role === 'owner'` checks — correct on every documented fixture, and exactly
+the kind of assumption the personalisation exists to catch.
+**What would change my mind:** a fixture whose top-ranked role is not meant to own orgs — then
+ownership would need its own column or flag in `roles`.
+
+### The path's org is checked against the token before any lookup
+
+**What I chose:** `context.js` throws 404 when `params.org !== claims.org`, before reading the
+membership or the resource.
+**Why:** isolation is structural — the check does not depend on each route remembering a
+`WHERE org_id = ?`, and it reveals nothing about whether the other org or resource exists.
+`check-api.js` "D18 Acme token cannot address the new org" and the cross-org 404s.
+**What I rejected:** looking the resource up and comparing its `org_id` (403/404 per route).
+It works only as long as every route does it, and it touches the other org's data to decide.
+**What would change my mind:** an endpoint that must legitimately span orgs with one token —
+transfer is the only one, and it resolves the target org from the caller's membership there.
+
+### The database decides races; the code catches its answer
+
+**What I chose:** no check-before-insert for exclusive sessions or live invites; the insert is
+attempted, and `SQLITE_CONSTRAINT_UNIQUE` becomes 409. Unknown permissions: the FK on
+`grant_permissions` refuses, caught as `400 unknown_permission`. Invite accept flips with
+`WHERE accepted_at IS NULL AND revoked_at IS NULL` and requires `changes === 1`.
+**Why:** `check-edges.js` fires two exclusive starts and two accepts with `Promise.all` — one
+winner each time. A SELECT-then-INSERT has a window between the two.
+**What I rejected:** checking first "for a nicer error". I kept one check-first case where there
+is no index to lean on (device names, `assertNameFree`) and listed it as an open thread.
+**What would change my mind:** moving off SQLite's single writer to something where the partial
+index semantics differ — I would re-run the concurrency cases before trusting it.
+
+### Removal revokes the member's grants; rehire starts from the invited role
+
+**What I chose:** `removeMembership()` in `routes/orgs.js` revokes the user's live grants in that
+org alongside `status='removed'`, the version bump and ending sessions.
+**Why:** accept reactivates the same `memberships` row (`UNIQUE(org_id, user_id)`), and grants
+are keyed by user, not membership — without the revoke, a rehire silently inherits every old
+allow and deny. `check-edges.js` "old grants did not come back".
+**What I rejected:** leaving grants as history. Revoked rows *are* the history (`revoked_at`),
+and live rows would be live authority.
+**What would change my mind:** a product rule that suspension-like "come back as you were" is
+wanted for removal — then removal should just be suspension.
+
+### Audit refusals are written by one wrapper; successes by the handler's transaction
+
+**What I chose:** `on()` in `routes/index.js` wraps every authenticated handler in
+`auditDenials`; handlers write their own success row inside their transaction.
+**Why:** a refusal row must exist even though the handler threw (so it cannot be in the
+handler's transaction), and one wrapper means no route can forget. Success inside the
+transaction means a rolled-back change leaves no row claiming it happened.
+**What I rejected:** a wrapper that also writes the success row — it would log an allow even
+when the handler's transaction rolled back, and double-log for handlers that already audit.
+**What would change my mind:** needing the refusal row to be atomic with something else.
 ---
 
 ## Where this repo argues with itself

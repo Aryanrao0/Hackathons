@@ -82,8 +82,16 @@ accept; then both facts could be machine-readable.
 
 ## Deliberately not built
 
-What you chose not to build, and the reason. A scope cut with a stated reason is a senior
-judgement. An unmentioned gap is a gap.
+- **Caching of resolved permissions.** Measured 5.7 ms for 504 device rows with fresh
+  resolution (BUILD-LOG 22:20). A cache would add the one failure mode the brief warns about —
+  stale authority — to save time nobody can see.
+- **Pagination on devices, members, grants.** Audit has it (it grows without bound); the others
+  are bounded by what an org owns and measured fine at 500+.
+- **File transfer, and anything that touches a real device.** Ground rule: sessions are records.
+- **Password reset, email delivery, rate limiting.** Out of scope per the starter README; invite
+  tokens are shown in the console once instead of emailed.
+- **A leave-org button in the console.** The endpoint exists and is tested
+  (`check-api.js` LAST_OWNER); the UI was cut for time.
 
 ## Tools and sources
 

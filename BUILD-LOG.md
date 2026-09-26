@@ -157,10 +157,38 @@ user logs in.
 
 ## Phase 8 — hardening
 
-_What did you measure, what did you fix, and what did you deliberately leave alone? Anything you
-chose not to build belongs here with its reason._
+### 2026-09-26 22:15 IST · scripts/check-edges.js — 41/43, both wrong predictions were mine
+Wrote 43 HTTP cases for seams `check-api.js` does not reach: malformed Authorization headers,
+cross-org ids on id-only routes, grant validation, laundering across scope, concurrent starts
+and accepts, suspension, refresh replay, offboard/rehire, transfer.
+Two failures, neither a server bug:
+- Predicted a 20 KB bearer token → 401 from `verifyAccessToken`. Got **431**: Node's HTTP
+  parser rejects headers over 16 KB before `index.js` runs. Correct behaviour (not a 500);
+  the test now asserts 431 and says why.
+- Predicted the seeded `ses_live_build_server` would end `device_transferred`. Got
+  `user_suspended` — it is Sam's session, and my own suspension case earlier in the same run
+  had already ended it. The cascade was right; my test's ordering was wrong. The transfer case
+  now opens its own session first.
+44/44 after. Things these confirmed that I had only reasoned about: two simultaneous exclusive
+starts → exactly one 201 + one 409 (the partial index, no check-first code); two simultaneous
+accepts of one invite → one 200 + one 409; replaying a rotated refresh cookie kills the new one
+too; a removed-then-reinvited user comes back with the invited role and none of the old grants
+(the kiosk deny is gone).
+
+### 2026-09-26 22:20 IST · measured the device list
+Inserted 500 extra devices into Acme: `GET /orgs/org_acme/devices` returns 504 rows, median of 5
+runs **5.7 ms** after one warm-up (M-series laptop, production mode). Query count per request is
+fixed: 1 device query + 4 in `loadInputs()`, whatever the row count. No cache: resolution is
+fresh per request, so there is no stale-authority question to answer.
 
 ## Open threads
 
-_Things you know are wrong, unfinished, or that you would do differently with another day. Listing
-these honestly is worth more than pretending they do not exist — we will find them anyway._
+- Rank rules do not apply to grants: an admin may create a deny grant on an owner (the laundering
+  rule still stops granting what they lack). The documents list the grant checks without a rank
+  rule, so I followed them; I would argue for adding one.
+- Device name uniqueness is a check-then-insert in `assertNameFree` — there is no unique index to
+  lean on and I am not allowed to change the schema. Two concurrent creates can both win.
+- `transfer-files` is present per permission but does nothing beyond explaining itself: there is
+  no file transfer to perform (no real remote access).
+- Deleting an org leaves members' refresh tokens valid; they refresh into another org, which is
+  the intended outcome, but it is not tested beyond the UI flow.

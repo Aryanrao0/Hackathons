@@ -79,6 +79,22 @@ all. Deleted it. The real transfer risk (a device moved out of org A still lifti
 union view through its old grant) is the check above it, and that one does depend on the
 `d.org_id = g.org_id` join in `loadInputs`.
 
+### 2026-09-26 19:30 IST · context, lifecycle, audit — and a reversed decision
+REVERSED the 18:55 choice that `assertCan` with no device uses the strict org-wide scope.
+While listing the routes I hit the viewer who holds `session:start` only on lab-mac-01: the
+nav (union view) shows "start a session", but a strict gate on the endpoint would 403 it —
+the console and the API would disagree about the same person. Now `decision()` in
+`permissions.js` uses the union view for every device-less gate; the strict scope survives
+in exactly one place, `assertMayGrant`. All four suites still green after the change.
+`context.js` check order: verify → path org ≠ token org is 404 *before any lookup* → membership
+gone/removed 401 → pv 401 TOKEN_STALE → suspended 403 except four person-level routes
+(`SUSPENDED_OK`). I had to pass the route key into `authenticate()` for that last one —
+one-line change to the given `index.js`.
+`lifecycle.js` names no role: "owner" is `ORDER BY rank DESC LIMIT 1`. Found while writing it:
+an expired `control` session that nobody ended keeps `state='active'`, so the partial unique
+index would block that device forever. Added `expireSessions()` to run before session reads and
+inserts.
+
 ## Phase 3 — orgs, members, invites
 
 _Anything you had to work out that no document states. Invite lifecycle states are a common

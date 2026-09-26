@@ -144,17 +144,12 @@ export function resolveDevices(db, { userId, orgId, deviceIds, now = new Date() 
   return { role: inputs.membership?.role ?? null, byDevice };
 }
 
-// Org-wide only — the strict scope. Separate from resolve() so the laundering check cannot
-// be satisfied by a grant that only exists on one device.
-function resolveOrgWide(db, { userId, orgId, now = new Date() }) {
-  return evaluate(loadInputs(db, { userId, orgId, now }), null);
-}
-
+// A gate without a device uses the same org-level view the console's navigation is drawn
+// from, so an entry that is on screen is never refused by its own endpoint. (The strict
+// org-wide scope is only for assertMayGrant, below.)
 function decision(db, ctx, permission, deviceId) {
-  const set = deviceId
-    ? resolve(db, { userId: ctx.userId, orgId: ctx.orgId, deviceId }).permissions
-    : resolveOrgWide(db, ctx);
-  return set[permission] ?? IMPLICIT;
+  const { permissions } = resolve(db, { userId: ctx.userId, orgId: ctx.orgId, deviceId: deviceId ?? null });
+  return permissions[permission] ?? IMPLICIT;
 }
 
 export function can(db, ctx, permission, deviceId = null) {

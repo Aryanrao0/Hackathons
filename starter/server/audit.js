@@ -1,29 +1,43 @@
 // Append-only audit writes.
 //
-// YOURS TO WRITE. This file ships as a stub.
+// audit_events has BEFORE UPDATE / BEFORE DELETE triggers, so this module only ever INSERTs.
 //
-// audit_events has BEFORE UPDATE / BEFORE DELETE triggers, so this module only ever
-// INSERTs. Two things the spec is explicit about (BRIEF.md §4, PERMISSIONS.md §8):
-//
-//   - DENIED attempts are recorded, not just successes. A log that only holds
-//     successes cannot answer "who tried to change what".
-//   - a single action produces a single row. Write the success row inside the same
-//     transaction as the change it describes; do not also log the allow from a wrapper.
-//
-// Schema columns: id, org_id (NOT NULL), actor_id, action, target_type, target_id,
-// result ('allow'|'deny'), reason_code, request_id, at.
+//   - a SUCCESS row is written by the route, inside the same transaction as the change, so
+//     a rolled-back change leaves no row claiming it happened.
+//   - a REFUSAL row is written by auditDenials(), which wraps every authenticated handler in
+//     routes/index.js. What counts as a refusal: 403 (permission, rank, self-change) and the
+//     409s that are the system saying no to an attempt (LAST_OWNER, DEVICE_BUSY).
+//     404s are not audited: they are what a caller sees for things outside their org.
 
-const todo = (name) =>
-  Object.assign(
-    new Error(`TODO: server/audit.js — ${name}() is yours to write (BRIEF.md §3).`),
-    { code: 'NOT_IMPLEMENTED' }
-  );
+import { HttpError } from './http.js';
+import { newId, nowIso } from './db.js';
 
-export function audit(db, { orgId, actorId, action, targetType, targetId, result, reasonCode, requestId }) {
-  throw todo('audit');
+export function audit(db, { orgId, actorId, action, targetType = null, targetId = null, result = 'allow', reasonCode = null, requestId = null }) {
+  db.prepare(
+    `INSERT INTO audit_events (id, org_id, actor_id, action, target_type, target_id, result, reason_code, request_id, at)
+     VALUES (?,?,?,?,?,?,?,?,?,?)`
+  ).run(newId('aud'), orgId, actorId, action, targetType, targetId, result, reasonCode, requestId, nowIso());
 }
 
-// Run fn(); if it refuses with a permission error, record the denial before rethrowing.
-export function auditDenials(db, ctx, meta, fn) {
-  throw todo('auditDenials');
+const AUDITED_REFUSALS = new Set(['FORBIDDEN', 'SELF_ROLE_CHANGE', 'LAST_OWNER', 'DEVICE_BUSY']);
+
+// Run fn(); if it refuses, record the denial before rethrowing.
+export async function auditDenials(db, ctx, meta, fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof HttpError && AUDITED_REFUSALS.has(err.code) && ctx.orgId) {
+      audit(db, {
+        orgId: ctx.orgId,
+        actorId: ctx.userId,
+        action: meta.action,
+        targetType: meta.targetType ?? null,
+        targetId: meta.targetId ?? null,
+        result: 'deny',
+        reasonCode: err.reason ?? err.code.toLowerCase(),
+        requestId: ctx.requestId,
+      });
+    }
+    throw err;
+  }
 }

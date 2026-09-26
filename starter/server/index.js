@@ -23,12 +23,14 @@ const DIST = new URL('../dist/', import.meta.url).pathname;
 
 const db = openDatabase();
 const router = createRouter();
+const authenticateRequest = authenticate(db, SECRET);   // prepares its statements once
 registerRoutes(router, { db, secret: SECRET });
 
 // Routes reachable without a token. Everything else requires a valid JWT.
 const PUBLIC_ROUTES = new Set([
   'POST /v1/auth/login',
   'POST /v1/auth/refresh',
+  'POST /v1/auth/logout',
   'GET /v1/invites/:token',
   'POST /v1/invites/:token/accept',
 ]);
@@ -47,7 +49,7 @@ async function handleApi(req, res, url) {
 
     const key = `${req.method} ${hit.pattern}`;
     if (!PUBLIC_ROUTES.has(key)) {
-      Object.assign(ctx, authenticate(db, SECRET)(req, hit.params));
+      Object.assign(ctx, authenticateRequest(req, hit.params, key));
     }
 
     if (req.method !== 'GET' && req.method !== 'DELETE') {

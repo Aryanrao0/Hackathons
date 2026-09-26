@@ -97,8 +97,31 @@ inserts.
 
 ## Phase 3 — orgs, members, invites
 
-_Anything you had to work out that no document states. Invite lifecycle states are a common
-source of this._
+### 2026-09-26 20:10 IST · two transaction bugs in /auth/refresh, caught on read-back
+Both found reading my own code before running it, not by a test:
+1. The rotated refresh cookie was set on `res` *inside* the transaction. If `sessionBody()`
+   then threw (e.g. `orgId` you are not in), the new row rolled back but the error response
+   still carried its cookie — a credential for a row that does not exist; the next reload
+   would log the user out. Now `newRefreshRow()` returns the raw token and the cookie is set
+   after commit.
+2. On a concurrent-refresh race I called `revokeFamily()` then `throw` inside the same
+   transaction — the throw rolls back the revocation, so replay detection did nothing.
+   The transaction now returns `null` and the family is revoked outside it.
+Same lesson twice: inside `db.transaction`, a throw undoes every side effect *in the DB*, and
+none of the side effects *outside* it.
+
+### 2026-09-26 20:40 IST · check-api 65/66 — the docs and the test disagree on owners
+Predicted all of D8 would pass: I had implemented PERMISSIONS §6 literally, "modify a user of
+equal role → 403". Got `demoting a NON-last owner is allowed: got 403 want 200`
+(`check-api.js:150`, owner Dana demoting owner@acme). Equal rank, and the test wants 200.
+The test is the better rule: with strict "higher rank only", a second owner can never be
+demoted or removed by anyone, and `assertNotLastOwner` already protects the case that matters.
+Changed `assertCanModify`: the owner role (top rank) may modify anyone; everyone else needs
+strictly higher rank. 66/66, and the other four suites unchanged.
+Membership lifecycle choices the docs leave open: invites do NOT create `status='invited'`
+membership rows — the membership needs a `users` row and the invitee may not have one yet, so
+the row is created (or a `removed` one re-activated) at accept. Removal revokes the member's
+grants in that org, so a rehire starts from the invited role, not the old grants.
 
 ## Phase 4 — devices and grants
 

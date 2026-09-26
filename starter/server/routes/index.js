@@ -1,17 +1,31 @@
-// Route registration. The router is deliberately tiny: createRouter() from
-// ../router.js, first match wins, so register specific paths before parameterised
-// ones ('/members/me' before '/members/:userId').
+// Route registration. The router is deliberately tiny: first match wins, so specific paths
+// are registered before parameterised ones ('/members/me' before '/members/:userId').
 //
-// YOURS TO WRITE. The file list is empty on purpose — every endpoint in BRIEF.md §5.1
-// is yours to add, and the response shapes the console reads are in §5.2.
-//
-// Suggested split, mirroring the API: auth, orgs (orgs + members + effective + audit),
-// invites, devices (devices + grants), sessions. Keep the registration order here.
-//
-// The server boots with this file empty: every /v1/* request returns 404 until you
-// register something. That is the intended starting line.
+// Every route goes through on(): an authenticated handler is wrapped in auditDenials(), so a
+// refusal is written to the audit log in one place instead of being remembered per route.
+// Success rows are written by the handlers themselves, inside their transactions.
+
+import { auditDenials } from '../audit.js';
+import { authRoutes } from './auth.js';
+import { orgRoutes } from './orgs.js';
+import { inviteRoutes } from './invites.js';
+import { deviceRoutes } from './devices.js';
+import { sessionRoutes } from './sessions.js';
 
 export function registerRoutes(router, deps) {
-  const { db, secret } = deps;
-  void db; void secret;
+  const { db } = deps;
+
+  // on('post', '/v1/orgs/:org/grants', 'grant.create', handler, (params) => ({ targetType, targetId }))
+  const on = (method, pattern, action, handler, target = () => ({})) => {
+    router[method](pattern, (ctx, params, res) => {
+      if (!ctx.userId) return handler(ctx, params, res);   // public route: no caller to audit
+      return auditDenials(db, ctx, { action, ...target(params) }, () => handler(ctx, params, res));
+    });
+  };
+
+  authRoutes(on, deps);
+  orgRoutes(on, deps);
+  inviteRoutes(on, deps);
+  deviceRoutes(on, deps);
+  sessionRoutes(on, deps);
 }

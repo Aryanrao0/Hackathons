@@ -58,12 +58,27 @@ accept; then both facts could be machine-readable.
 
 ## Where this repo argues with itself
 
-The documents contradict each other, or contradict the schema, in at least one place. Name each
-one you found. For each: quote both statements, say which you built against, and say why.
-
-Building against the written rule and arguing in writing is a **full-marks** answer. Silently
-working around it, or quietly picking one and saying nothing, scores zero on the section — we
-cannot tell the difference between a decision and an oversight.
+1. **Equal-rank modification.** PERMISSIONS §6: "modify a user of equal role (admin → admin) |
+   403". `check-api.js:150`: owner demoting another owner → 200. Built: equal rank refused
+   *except* for the owner role (`assertCanModify` in `lifecycle.js`). Why: otherwise a second
+   owner is irremovable; last-owner protection covers the real risk. (BUILD-LOG 20:40)
+2. **"`device:*` collapses to the seven device permissions"** (PERMISSIONS §4). False for any
+   database with the personalisation overlay: mine has `device:reboot`, so `device:*` is 8.
+   Built against the schema: `expandPattern` reads `permissions.resource`.
+3. **Not a member → 401** (PERMISSIONS §5) vs **cross-org → 404** (§5 and `check-api.js:72`).
+   Both hold once "not a member" is read as *of the token's own org*: a path naming another org
+   is 404 before any lookup (`context.js`); a token whose own membership is gone is 401.
+4. **"a NEW session is now blocked"** (`check-api.js:128`) asserts **401**, not 403. The demotion
+   bumped `perm_version`, so the token is stale before the permission check is reached. Built
+   as the test says; the order in `context.js` makes it so.
+5. **Invites "flip the membership from `invited` to `active`"** (AUTH-DATA-MODEL §6), but
+   `memberships.user_id` is a NOT NULL FK to `users` and an invitee may have no user yet. Built:
+   no `invited` rows; the membership is created, or a `removed` one reactivated, on accept.
+6. **"A token for a suspended membership → 403 with an empty permission set"** (AUTH §10) vs the
+   single error shape (§5). Built: 403 `FORBIDDEN`/`suspended` in the standard shape; the
+   engine's answer for a suspended member is every permission denied with `reason: suspended`.
+7. **`end_reason = 'superseded'`** is allowed by the schema and mentioned in no document. Not
+   produced by anything; left alone.
 
 ## Deliberately not built
 

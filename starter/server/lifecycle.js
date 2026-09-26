@@ -26,9 +26,12 @@ export function assertRoleExists(db, role) {
   }
 }
 
-// You may modify someone strictly below you. Equal rank is refused (admin -> admin).
+// You may modify someone strictly below you. Equal rank is refused (admin -> admin) — except
+// for the owner role: owners may modify other owners, or a second owner could never be
+// demoted or removed. assertNotLastOwner is what stops that from emptying the org.
 export function assertCanModify(db, callerRole, targetRole) {
   const ranks = roleRanks(db);
+  if (callerRole === ownerRole(db)) return;
   if (!(ranks.get(callerRole) > ranks.get(targetRole))) {
     throw forbidden('you can only modify members ranked below you', 'insufficient_rank');
   }
